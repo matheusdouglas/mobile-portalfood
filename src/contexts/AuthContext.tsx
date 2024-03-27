@@ -1,4 +1,4 @@
-import React, { useState, createContext, ReactNode } from "react";
+import React, { useState, createContext, ReactNode, useEffect } from "react";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -7,7 +7,10 @@ import { api } from "../services/api";
 type AuthContextData = {
   user: userProps;
   isAuthenticated: boolean;
-  realizarLogin : (credenciais : SignInProps) => Promise<void>
+  realizarLogin: (credenciais: SignInProps) => Promise<void>;
+  loadingAuth: boolean;
+  loading: boolean;
+  deslogarUsuario: ()=> Promise<void>;
 };
 
 type userProps = {
@@ -17,19 +20,18 @@ type userProps = {
   token: string;
 };
 
-type AuthProviderProps =  {
-    children : ReactNode
-}
+type AuthProviderProps = {
+  children: ReactNode;
+};
 
 type SignInProps = {
-    email : string
-    password : string
-}
+  email: string;
+  password: string;
+};
 
 export const AuthContext = createContext({} as AuthContextData);
 
-export function AuthProvider({children } : AuthProviderProps) {
-
+export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<userProps>({
     id: "",
     name: "",
@@ -37,46 +39,92 @@ export function AuthProvider({children } : AuthProviderProps) {
     token: "",
   });
 
-  const [loadingAuth, setLoadinAuth] = useState(false)
+  const [loadingAuth, setLoadinAuth] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const isAuthenticated = !!user.name;
 
-  async function realizarLogin({email, password} : SignInProps) {
-      setLoadinAuth(true)
+  useEffect(() => {
+    async function pegarUsuario() {
+      // pegar os dados salvo do user
 
-      try {
-        const response = await api.post('/session', {
-            email,
-            password
-        })
+      const userInfo = await AsyncStorage.getItem("@portalfood");
+      let temUsuario: userProps = JSON.parse(userInfo || "{}");
 
-       const { id, name ,token } = response.data
+      // verificar se recebemos as info do usuario
 
-       const data = {
-        ...response.data 
-       }
+      if (Object.keys(temUsuario).length > 0) {
+        api.defaults.headers.common[
+          "Authorization"
+        ] = `Bearer  ${temUsuario.token}`;
+      
+        setUser({
+          id: temUsuario.id,
+          name: temUsuario.name,
+          email: temUsuario.email,
+          token: temUsuario.token,
+        });
+      
+        setLoading(false);
+        console.log("Usuário encontrado, loading definido como false");
+      } else {
+        setLoading(false);
+        console.log("Usuário não encontrado, loading definido como false");
+      }
+    }
 
-       await AsyncStorage.setItem('@portalfood', JSON.stringify(data))
+    pegarUsuario();
+  }, []);
 
-       api.defaults.headers.common['Authorization'] = `Bearer  ${token}`
+  async function realizarLogin({ email, password }: SignInProps) {
+    setLoadinAuth(true);
 
-       setUser({
+    try {
+      const response = await api.post("/session", {
+        email,
+        password,
+      });
+
+      const { id, name, token } = response.data;
+
+      const data = {
+        ...response.data,
+      };
+
+      await AsyncStorage.setItem("@portalfood", JSON.stringify(data));
+
+      api.defaults.headers.common["Authorization"] = `Bearer  ${token}`;
+
+      setUser({
         id,
         name,
         email,
-        token
-       })
+        token,
+      });
 
-       setLoadinAuth(false);
+      setLoadinAuth(false);
+    } catch (err) {
+      console.log("Erro ao acessar", err);
+      setLoadinAuth(false);
+    }
+  }
 
-      }catch(err){
-        console.log('Erro ao acessar', err)
-        setLoadinAuth(false);
-      }
+  async function deslogarUsuario() {
+    await AsyncStorage.clear()
+    .then(() => {
+      setUser({
+        id: "",
+        name: "",
+        email: "",
+        token: "",
+      })
+    })
   }
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated, realizarLogin }}>
+    <AuthContext.Provider
+      value={{ user, isAuthenticated, realizarLogin, loading, loadingAuth, deslogarUsuario }}
+    >
       {children}
     </AuthContext.Provider>
   );
