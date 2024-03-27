@@ -55,7 +55,9 @@ export default function Login() {
           <Text style={styles.buttonText}>Acessar</Text>
         </TouchableOpacity>
 
-        <Text style={styles.textLabel}>Nao possui uma conta? Cadastra-se</Text>
+        <Text style={styles.textLabel}>Nao possui uma conta? Cadastra-se</Text> 
+     
+     
       </View>
     </View>
   );
